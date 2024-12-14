@@ -1,181 +1,103 @@
-from random import randint, choice
+import time
 
+class Character:
+    def __init__(self, name, health, attack):
+        self.name = name
+        self.health = health
+        self.attack = attack
 
-class GameEntity:
-    def __init__(self, name, health, damage):
-        self.__name = name
-        self.__health = health
-        self.__damage = damage
+    def take_damage(self, damage):
+        self.health = max(self.health - damage, 0)
 
-    @property
-    def name(self):
-        return self.__name
-
-    @property
-    def health(self):
-        return self.__health
-
-    @health.setter
-    def health(self, value):
-        if value < 0:
-            self.__health = 0
-        else:
-            self.__health = value
-
-    @property
-    def damage(self):
-        return self.__damage
-
-    @damage.setter
-    def damage(self, value):
-        self.__damage = value
+    def is_alive(self):
+        return self.health > 0
 
     def __str__(self):
-        return f'{self.__name} health: {self.__health} damage: {self.__damage}'
+        return f"{self.name} (Health: {self.health}, Attack: {self.attack})"
 
+class Boss(Character):
+    def __init__(self, name, health, attack):
+        super().__init__(name, health, attack)
 
-class Boss(GameEntity):
-    def __init__(self, name, health, damage):
-        super().__init__(name, health, damage)
-        self.__defence = None
+class Hero(Character):
+    def __init__(self, name, health, attack):
+        super().__init__(name, health, attack)
+        self.alive = True
 
-    @property
-    def defence(self):
-        return self.__defence
-
-    def choose_defence(self, heroes):
-        hero = choice(heroes)
-        self.__defence = hero.ability
-
-    def attack(self, heroes):
-        for hero in heroes:
-            if hero.health > 0:
-                if type(hero) == Berserk and self.defence != hero.ability:
-                    block = choice([5, 10])  # 5 or 10
-                    hero.blocked_damage = block
-                    hero.health -= (self.damage - block)
-                else:
-                    hero.health -= self.damage
-
-    def __str__(self):
-        return f'BOSS ' + super().__str__() + f' defence: {self.__defence}'
-
-
-class Hero(GameEntity):
-    def __init__(self, name, health, damage, ability):
-        super().__init__(name, health, damage)
-        self.__ability = ability
-
-    @property
-    def ability(self):
-        return self.__ability
-
-    def attack(self, boss):
-        boss.health -= self.damage
-
-    def apply_super_power(self, boss, heroes):
+    def special_ability(self, boss, heroes, round_number):
         pass
 
+class Witcher(Hero):
+    def __init__(self, name, health):
+        super().__init__(name, health, 0)  # Witcher does not deal damage
+        self.revived = False
 
-class Warrior(Hero):
-    def __init__(self, name, health, damage):
-        super().__init__(name, health, damage, 'CRIT')
-
-    def apply_super_power(self, boss, heroes):
-        coef = randint(2, 5)
-        boss.health -= self.damage * coef
-        print(f'Warrior {self.name} hit critically {self.damage * coef}')
-
+    def special_ability(self, boss, heroes, round_number):
+        if not self.revived:
+            for hero in heroes:
+                if not hero.is_alive() and hero != self:
+                    hero.health = self.health
+                    self.health = 0
+                    self.revived = True
+                    print(f"{self.name} sacrifices himself to revive {hero.name}!")
+                    break
 
 class Magic(Hero):
-    def __init__(self, name, health, damage):
-        super().__init__(name, health, damage, 'BOOST')
+    def __init__(self, name, health, attack, boost_amount):
+        super().__init__(name, health, attack)
+        self.boost_amount = boost_amount
 
-    def apply_super_power(self, boss, heroes):
-        # TODO Implementation of BOOST ability
-        pass
+    def special_ability(self, boss, heroes, round_number):
+        if round_number <= 4:
+            for hero in heroes:
+                if hero != self and hero.is_alive():
+                    hero.attack += self.boost_amount
+            print(f"{self.name} boosts attack of all heroes by {self.boost_amount} for round {round_number}! Waiting 10 seconds.")
+            time.sleep(10)
 
+class Hacker(Hero):
+    def __init__(self, name, health, attack, steal_amount):
+        super().__init__(name, health, attack)
+        self.steal_amount = steal_amount
 
-class Medic(Hero):
-    def __init__(self, name, health, damage, heal_points):
-        super().__init__(name, health, damage, 'HEAL')
-        self.__heal_points = heal_points
+    def special_ability(self, boss, heroes, round_number):
+        if round_number % 2 == 0 and boss.health > 0:
+            boss.health -= self.steal_amount
+            weakest_hero = min([hero for hero in heroes if hero.is_alive()], key=lambda h: h.health)
+            weakest_hero.health += self.steal_amount
+            print(f"{self.name} steals {self.steal_amount} health from {boss.name} and gives it to {weakest_hero.name}!")
 
-    def apply_super_power(self, boss, heroes):
+# Example setup
+boss = Boss("Dark Lord", 1000, 50)
+heroes = [
+    Witcher("Geralt", 300),
+    Magic("Gandalf", 250, 30, 10),
+    Hacker("Neo", 200, 25, 12)
+]
+
+# Simulating rounds
+round_number = 1
+while boss.is_alive() and any(hero.is_alive() for hero in heroes):
+    print(f"\n--- Round {round_number} ---")
+    for hero in heroes:
+        if hero.is_alive():
+            hero.special_ability(boss, heroes, round_number)
+            boss.take_damage(hero.attack)
+            print(f"{hero.name} attacks {boss.name}, dealing {hero.attack} damage!")
+
+    if boss.is_alive():
         for hero in heroes:
-            if hero.health > 0 and self != hero:
-                hero.health += self.__heal_points
+            if hero.is_alive():
+                hero.take_damage(boss.attack)
+                print(f"{boss.name} attacks {hero.name}, dealing {boss.attack} damage!")
 
-
-class Berserk(Hero):
-    def __init__(self, name, health, damage):
-        super().__init__(name, health, damage, 'BLOCK_REVERT')
-        self.__blocked_damage = 0
-
-    @property
-    def blocked_damage(self):
-        return self.__blocked_damage
-
-    @blocked_damage.setter
-    def blocked_damage(self, value):
-        self.__blocked_damage = value
-
-    def apply_super_power(self, boss, heroes):
-        boss.health -= self.blocked_damage
-        print(f'Berserk {self.name} reverted {self.__blocked_damage} damage to boss')
-
-
-round_number = 0
-
-
-def is_game_over(boss, heroes):
-    if boss.health <= 0:
-        print('Heroes won!!!')
-        return True
-    all_heroes_dead = True
-    for hero in heroes:
-        if hero.health > 0:
-            all_heroes_dead = False
-            break
-    if all_heroes_dead:
-        print('Boss won!!!')
-        return True
-    return False
-
-
-def play_round(boss, heroes):
-    global round_number
     round_number += 1
-    boss.choose_defence(heroes)
-    boss.attack(heroes)
-    for hero in heroes:
-        if hero.health > 0 and boss.health > 0 and hero.ability != boss.defence:
-            hero.attack(boss)
-            hero.apply_super_power(boss, heroes)
-    show_statistics(boss, heroes)
 
+print("\n--- Battle Over ---")
+if boss.is_alive():
+    print(f"{boss.name} wins!")
+else:
+    print("Heroes win!")
 
-def show_statistics(boss, heroes):
-    print(f'ROUND {round_number} -------------')
-    print(boss)
-    for hero in heroes:
-        print(hero)
-
-
-def start_game():
-    boss = Boss('Lord', 1000, 50)
-    warrior_1 = Warrior('Brane', 280, 15)
-    warrior_2 = Warrior('Alucard', 270, 20)
-    magic = Magic('Subaru', 290, 10)
-    doc = Medic('Merlin', 250, 5, 15)
-    assistant = Medic('Florin', 300, 5, 5)
-    berserk = Berserk('Guts', 260, 10)
-
-    heroes_list = [warrior_1, warrior_2, magic, doc, assistant, berserk]
-
-    show_statistics(boss, heroes_list)
-    while not is_game_over(boss, heroes_list):
-        play_round(boss, heroes_list)
-
-
-start_game()
+for hero in heroes:
+    print(hero)
